@@ -21,9 +21,9 @@
 """
 
 import enum
-from typing import List, Optional as Opt
-
-import numpy
+import logging
+import warnings
+from typing import Tuple, List, Optional as Opt
 
 from PyPWA import Path, AUTHOR, VERSION
 
@@ -81,25 +81,97 @@ class FileSettings(object):
 
 class BinSettings(object):
 
-    def __init__(self, bin_type, lower_limit, upper_limit, width):
-        # type: (str, int, int, int, Opt[bool]) -> None
+    __LOGGER = logging.getLogger(__name__ + ".BinSettings")
+
+    def __init__(
+            self, bin_type, lower_limit, upper_limit, width, use_numbers):
+        # type: (BinType, int, int, int, Opt[bool]) -> None
         self.__bin_type = bin_type
         self.__lower_limit = lower_limit
         self.__upper_limit = upper_limit
+        self.__range = upper_limit - lower_limit
         self.__width = width
+        self.__setup_bin_settings(use_numbers)
+
+    def __setup_bin_settings(self, use_numbers):
+        # type: (bool) -> None
+        if use_numbers:
+            self.__calculate_bin_width()
+        else:
+            self.__verify_bin_width()
+
+    def __calculate_bin_width(self):
+        self.__width = float("%.4f" % (self.__range / self.__width))
+        self.__LOGGER.info("Settings bin width to %f" % self.__width)
+        self.__verify_bin_width()
+
+    def __verify_bin_width(self):
+        bin_count = int(self.__range / self.__width)
+        calculated_upper = self.__lower_limit + (bin_count * self.__width)
+        if not calculated_upper == self.__upper_limit:
+            self.__throw_warning(calculated_upper)
+            self.__upper_limit = calculated_upper
+
+    def __throw_warning(self, calculated_upper_limit):
+        # type: (float) -> None
+        warning_string = (
+            "Bin Width %f doesn't divide evenly into limits: %f, %f; "
+            "Setting upper limit to %f!" % (
+                self.__width, self.__lower_limit, self.__upper_limit,
+                calculated_upper_limit
+            )
+        )
+        warnings.warn(warning_string, UserWarning)
 
     @property
     def bin_type(self):
+        # type: () -> BinType
         return self.__bin_type
 
     @property
     def lower_limit(self):
+        # type: () -> float
         return self.__lower_limit
 
     @property
     def upper_limit(self):
+        # type: () -> float
         return self.__upper_limit
 
     @property
     def width(self):
+        # type: () -> float
         return self.__width
+
+    @property
+    def lower_limits_tuple(self):
+        # type: () -> Tuple(int)
+        return tuple(
+            range(self.__lower_limit, self.__upper_limit, self.__width)
+        )
+
+    @property
+    def bin_count(self):
+        # type: () -> int
+        return len(self.lower_limits_tuple)
+
+
+class SettingsCollection(object):
+
+    def __init__(self, file_settings, bin_settings):
+        # type: (FileSettings, Tuple[BinSettings]) -> None
+        self.__file_settings = file_settings
+        self.__bin_settings = bin_settings
+
+    def get_bin_dimensions(self, dimension):
+        if dimension >= self.bin_dimensions_count:
+            raise IndexError("The user didn't request that many dimensions!")
+        return self.__bin_settings[dimension]
+
+    @property
+    def bin_dimensions_count(self):
+        return len(self.__bin_settings)
+
+    @property
+    def bin_settings(self):
+        return self.__bin_settings
