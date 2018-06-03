@@ -23,7 +23,7 @@
 import enum
 import logging
 import warnings
-from typing import Tuple, List, Optional as Opt
+from typing import Any, Dict, List
 
 from PyPWA import Path, AUTHOR, VERSION
 
@@ -38,20 +38,20 @@ class BinType(enum.Enum):
     Energy = enum.auto()
 
 
-def get_calculation_prefix(binning_type):
-    return {
-        BinType.Mass: "MeV",
-        BinType.Energy: "GeV"
-    }[binning_type]
-
-
 class FileSettings(object):
 
-    def __init__(self, source, extras):
-        # type: (Path, List[Path]) -> None
-        self.__source_file = source
-        self.__extra_files = extras
+    def __init__(self, settings):
+        # type: (Dict[str, str]) -> None
+        self.__source_file = Path(settings['source'])
+        self.__extra_files = self.__setup_extras(settings['extras'])
         self.__check_files_exist()
+
+    @staticmethod
+    def __setup_extras(extras):
+        if isinstance(extras, type(None)):
+            return list()
+        else:
+            return [Path(file) for file in extras]
 
     def __check_files_exist(self):
         self.__raise_if_file_does_not_exist(self.__source_file)
@@ -83,26 +83,39 @@ class BinSettings(object):
 
     __LOGGER = logging.getLogger(__name__ + ".BinSettings")
 
-    def __init__(
-            self, bin_type, lower_limit, upper_limit, width, use_numbers):
-        # type: (BinType, int, int, int, Opt[bool]) -> None
-        self.__bin_type = bin_type
-        self.__lower_limit = lower_limit
-        self.__upper_limit = upper_limit
-        self.__range = upper_limit - lower_limit
-        self.__width = width
-        self.__setup_bin_settings(use_numbers)
+    def __init__(self, bin_setting):
+        # type: (Dict[str, Any]) -> None
+        self.__width = None  # type: float
+        self.__bin_type = self.__process_bin_type(bin_setting)
+        self.__lower_limit = bin_setting['lower limit']
+        self.__upper_limit = bin_setting['upper limit']
+        self.__range = self.__upper_limit - self.__lower_limit
+        self.__setup_bin_width(bin_setting)
 
-    def __setup_bin_settings(self, use_numbers):
-        # type: (bool) -> None
-        if use_numbers:
-            self.__calculate_bin_width()
+    @staticmethod
+    def __process_bin_type(settings):
+        # type: (Dict[str, str]) -> BinType
+        if settings['binning type'] == "mass":
+            return BinType.Mass
+        elif settings['binning type'] == 'energy':
+            return BinType.Energy
         else:
-            self.__verify_bin_width()
+            raise ValueError(
+                'Unknown bin type %s!' % settings['binning type']
+            )
 
-    def __calculate_bin_width(self):
-        self.__width = float("%.4f" % (self.__range / self.__width))
-        self.__LOGGER.info("Settings bin width to %f" % self.__width)
+    def __setup_bin_width(self, settings):
+        # type: (Dict[str, Any]) -> None
+        if 'number of bins' in settings:
+            self.__calculate_bin_width(settings)
+        else:
+            self.__width = settings['width of each bin']
+            self.__verify_bin_width(settings)
+
+    def __calculate_bin_width(self, settings):
+        bin_count = settings['number of bins']
+        self.__width = float("%.4f" % (self.__range / bin_count))
+        self.__LOGGER.info("Setting bin width to %f" % bin_count)
         self.__verify_bin_width()
 
     def __verify_bin_width(self):
@@ -122,6 +135,12 @@ class BinSettings(object):
             )
         )
         warnings.warn(warning_string, UserWarning)
+
+    def get_calculation_prefix(self):
+        return {
+            BinType.Mass: "MeV",
+            BinType.Energy: "GeV"
+        }[self.__bin_type]
 
     @property
     def bin_type(self):
@@ -145,10 +164,8 @@ class BinSettings(object):
 
     @property
     def lower_limits_tuple(self):
-        # type: () -> Tuple(int)
-        return tuple(
-            range(self.__lower_limit, self.__upper_limit, self.__width)
-        )
+        # type: () -> List(int)
+        return [range(self.__lower_limit, self.__upper_limit, self.__width)]
 
     @property
     def bin_count(self):
@@ -159,7 +176,7 @@ class BinSettings(object):
 class SettingsCollection(object):
 
     def __init__(self, file_settings, bin_settings):
-        # type: (FileSettings, Tuple[BinSettings]) -> None
+        # type: (FileSettings, List[BinSettings]) -> None
         self.__file_settings = file_settings
         self.__bin_settings = bin_settings
 
@@ -170,8 +187,42 @@ class SettingsCollection(object):
 
     @property
     def bin_dimensions_count(self):
+        # type: () -> int
         return len(self.__bin_settings)
 
     @property
     def bin_settings(self):
+        # type: () -> List[BinSettings]
         return self.__bin_settings
+
+
+class SettingsFactory(object):
+
+    def __init__(self, settings):
+        # type: (Dict[str, Any]) -> None
+        self.__bin_settings = list()  # type: List[BinSettings]
+        self.__file_settings = list()  # type: List[FileSettings]
+        self.__collections = list()  # type: List[SettingsCollection]
+        self.__process_bin_settings(settings['bin settings'])
+        self.__process_file_settings(settings['files'])
+        self.__create_collections()
+
+    def __process_bin_settings(self, bin_settings):
+        # type: (List[Dict[str, Any]]) -> None
+        for setting in bin_settings:
+            self.__bin_settings.append(BinSettings(setting))
+
+    def __process_file_settings(self, file_settings):
+        # type: (List[Dict[str, str]]) -> None
+        for setting in file_settings:
+            self.__file_settings.append(FileSettings[setting])
+
+    def __create_collections(self):
+        for file_setting in self.__file_settings:
+            self.__collections.append(
+                SettingsCollection(file_setting, self.__bin_settings)
+            )
+
+    @property
+    def collections(self):
+        return self.__collections
