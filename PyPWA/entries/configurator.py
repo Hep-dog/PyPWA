@@ -119,3 +119,14 @@ def generate_weights():
         "extras": None
     }
     initializer.start(configuration)
+
+
+def multiple_binning():
+    description = u"Sorts data into multiple bins."
+    configuration = {
+        "description": description,
+        "main": "multiple binner",
+        "main name": "Multiple Binning",
+        "extras": None
+    }
+    initializer.start(configuration)

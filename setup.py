@@ -35,6 +35,7 @@ entry_points = {
         "PySimulate = %s:py_simulate" % configurator_entry,
         "GenerateIntensities = %s:generate_intensities" % configurator_entry,
         "GenerateWeights = %s:generate_weights" % configurator_entry,
+        "PyBinning = %s:multiple_binning" % configurator_entry,
         "PyMask = %s:masking_utility" % argument_entry
     ]
 }
