@@ -25,20 +25,20 @@ from PyPWA import Path, AUTHOR, VERSION
 from PyPWA.libs.components.data_processor import (
     file_processor, data_templates
 )
-from PyPWA.progs.binner import _bin_data
+from PyPWA.progs.binner import _settings_parser
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
 __version__ = VERSION
 
 
-class _GetFileHandle(object):
+class _OpenFileHandles(object):
 
     def __init__(self):
         # type: () -> None
         self.__parser = file_processor.DataProcessor()
 
-    def get_file_handle(self, source, extras, destination):
+    def get_file_handles(self, source, extras, destination):
         # type: (Path, List[Path], Path) -> Dict[str, Any]
         self.__create_file_tree(destination)
         return {
@@ -65,17 +65,18 @@ class _GetFileHandle(object):
         return handler_list
 
 
-class _FileHandles(object):
+class _FileHandlesDict(object):
 
     def __init__(self):
-        self.__get_file_handles = _GetFileHandle()
+        self.__get_file_handles = _OpenFileHandles()
 
-    def get_bin_handles(self, source_file, extras, root, bin_types):
+    def get_bin_handles_dict(self, source_file, extras, root, bin_types):
+        # type: (Path, List[Path], Path, List[_settings_parser.BinSettings]) -> dict
         file_handles = dict()
         for lower_limit in bin_types[0].lower_limits_list:
             destination = self.__get_destination(root, lower_limit, bin_types)
             if len(bin_types[1:]):
-                file_handles[lower_limit] = self.get_bin_handles(
+                file_handles[lower_limit] = self.get_bin_handles_dict(
                     source_file, extras, destination, bin_types[1:]
                 )
             else:
@@ -86,13 +87,14 @@ class _FileHandles(object):
 
     @staticmethod
     def __get_destination(root, lower_limit, bin_types):
-        # type: (Path, int, List[_bin_data.BinSettings]) -> Path
+        # type: (Path, int, List[_settings_parser.BinSettings]) -> Path
         prefix = bin_types[0].get_calculation_prefix()
         destination = root / (str(lower_limit) + prefix)
         return destination
 
     def __produce_file_handles(self, source, extras, destination):
-        return self.__get_file_handles.get_file_handle(
+        # type: (Path, List[Path], Path) -> Dict
+        return self.__get_file_handles.get_file_handles(
             source, extras, destination
         )
 
@@ -109,20 +111,21 @@ class _CloseHandles(object):
 
     @staticmethod
     def __close_handles(value):
+        # type: (Dict) -> None
         value['destination'].close()
         for extra in value['extras']:
             extra.close()
 
 
-class BinDirectoryManager(object):
+class BinWriter(object):
 
     def __init__(self, settings):
-        # type: (_bin_data.SettingsCollection) -> None
+        # type: (_settings_parser.SettingsCollection) -> None
         self.__handles = None
         self.__opened = False
         self.__settings = settings
         self.__handle_closer = _CloseHandles()
-        self.__handle_opener = _FileHandles()
+        self.__handle_opener = _FileHandlesDict()
 
     def open(self):
         if not self.__opened:
@@ -150,10 +153,12 @@ class BinDirectoryManager(object):
             raise RuntimeError("Directory Manager isn't open!")
 
     def write(self, write_packet):
+        # type: (Dict) -> None
         writers = self.__get__writers(write_packet['bins'])
         self.__write_packet(writers, write_packet['files'])
 
     def __get__writers(self, bins):
+        # type: (List[int]) -> Dict
         sample = self.__handles
         for index_bin in bins:
             sample = sample[index_bin]

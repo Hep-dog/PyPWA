@@ -22,12 +22,12 @@
 import numpy
 import tqdm
 
-from PyPWA import queue, AUTHOR, VERSION
+from PyPWA import AUTHOR, VERSION
 from PyPWA.libs.components.data_processor import (
     file_processor, data_templates
 )
 from PyPWA.libs.math import vectors, particle
-from PyPWA.progs.binner import _bin_data, _directory_manager
+from PyPWA.progs.binner import _settings_parser, _multiple_writer
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
@@ -37,7 +37,7 @@ __version__ = VERSION
 class _MultipleReader(object):
 
     def __init__(self, file_settings):
-        # type: (_bin_data.FileSettings) -> None
+        # type: (_settings_parser.FileSettings) -> None
         self.__event_count = None  # type: int
         self.__processor = file_processor.DataProcessor()
         self.__source = self.__setup_source(file_settings)
@@ -100,7 +100,7 @@ class _MultipleReader(object):
 class Binning(object):
 
     def __init__(self, settings_collection):
-        # type: (_bin_data.SettingsCollection) -> None
+        # type: (_settings_parser.SettingsCollection) -> None
         self.__setting = settings_collection
 
     def bin(self):
@@ -111,14 +111,14 @@ class Binning(object):
         args = {
             "desc": "Binning", "unit": "events"
         }
-        with _directory_manager.BinDirectoryManager(self.__setting) as write:
+        with _multiple_writer.BinWriter(self.__setting) as multiple_writer:
             for event in tqdm.tqdm(multiple_reader, **args):
                 mass = self.__calculate_mass(event['destination'])
                 packet = {
                     'bins': self.__find_bin(mass),
                     'files': event
                 }
-                write.write(packet)
+                multiple_writer.write(packet)
 
     @staticmethod
     def __calculate_mass(event):
