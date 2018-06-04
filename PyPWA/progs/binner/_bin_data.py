@@ -110,7 +110,7 @@ class BinSettings(object):
             self.__calculate_bin_width(settings)
         else:
             self.__width = settings['width of each bin']
-            self.__verify_bin_width(settings)
+            self.__verify_bin_width()
 
     def __calculate_bin_width(self, settings):
         bin_count = settings['number of bins']
@@ -138,8 +138,8 @@ class BinSettings(object):
 
     def get_calculation_prefix(self):
         return {
-            BinType.Mass: "MeV",
-            BinType.Energy: "GeV"
+            BinType.Mass: "_MeV",
+            BinType.Energy: "_GeV"
         }[self.__bin_type]
 
     @property
@@ -163,14 +163,16 @@ class BinSettings(object):
         return self.__width
 
     @property
-    def lower_limits_tuple(self):
+    def lower_limits_list(self):
         # type: () -> List(int)
-        return [range(self.__lower_limit, self.__upper_limit, self.__width)]
+        return list(
+            range(self.__lower_limit, self.__upper_limit, self.__width)
+        )
 
     @property
     def bin_count(self):
         # type: () -> int
-        return len(self.lower_limits_tuple)
+        return len(self.lower_limits_list)
 
 
 class SettingsCollection(object):
@@ -195,6 +197,10 @@ class SettingsCollection(object):
         # type: () -> List[BinSettings]
         return self.__bin_settings
 
+    @property
+    def file_settings(self):
+        return self.__file_settings
+
 
 class SettingsFactory(object):
 
@@ -215,7 +221,7 @@ class SettingsFactory(object):
     def __process_file_settings(self, file_settings):
         # type: (List[Dict[str, str]]) -> None
         for setting in file_settings:
-            self.__file_settings.append(FileSettings[setting])
+            self.__file_settings.append(FileSettings(setting))
 
     def __create_collections(self):
         for file_setting in self.__file_settings:
