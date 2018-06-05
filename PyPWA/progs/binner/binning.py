@@ -19,6 +19,8 @@
 """
 
 """
+
+from typing import List
 import numpy
 
 from PyPWA import AUTHOR, VERSION
@@ -30,41 +32,92 @@ __author__ = AUTHOR
 __version__ = VERSION
 
 
+class _GetBinIndex(object):
+
+    def __init__(self, limits):
+        self.__limits = limits
+
+    def get_bin_id(self, calculated_value):
+        if calculated_value < self.__limits[0]:
+            return 'underflow'
+        else:
+            return self.__calculate_limit(calculated_value)
+
+    def __calculate_limit(self, calculated_value):
+        previous_limit = self.__limits[0]
+        for limit in self.__limits:
+            if limit > calculated_value > previous_limit:
+                return previous_limit
+            else:
+                previous_limit = limit
+        return 'overflow'
+
+
+class _SortBins(object):
+
+    def __init__(self, bin_settings):
+        # type: (List[_settings_parser.BinSettings]) -> None
+        self.__bin_sorters = self.__get_bin_sorters(bin_settings)
+
+    @staticmethod
+    def __get_bin_sorters(bin_settings):
+        # type: (List[_settings_parser.BinSettings]) -> List[_GetBinIndex]
+        bin_searchers = []
+        for bin_setting in bin_settings:
+            bin_searchers.append(_GetBinIndex(bin_setting.lower_limits_list))
+        return bin_searchers
+
+    def sort(self, calculated_values):
+        # type: (List[float]) -> List[int]
+        found_locations = []
+        for value, sorting in zip(calculated_values, self.__bin_sorters):
+            found_locations.append(sorting.get_bin_id(value))
+        return found_locations
+
+
+class _CalculateMass(object):
+
+    def calculate(self, event):
+        # type: (particle.ParticlePool) -> List[float]
+        total = self.__get_particle_total(event)
+        return [self.__calculate_mass(total)]
+
+    def __get_particle_total(self, event):
+        # type: (particle.ParticlePool) -> vectors.FourVector
+        particle_vector = self.__get_empty_four_vector()
+        for event_particle in event.iterate_over_particles():
+            if event_particle.id not in (1, 14):
+                particle_vector += event_particle
+        return particle_vector
+
+    @staticmethod
+    def __get_empty_four_vector():
+        array = numpy.zeros(1, particle.NUMPY_PARTICLE_DTYPE)
+        return vectors.FourVector(array)
+
+    @staticmethod
+    def __calculate_mass(total):
+        # type: (vectors.FourVector) -> float
+        momentum_squared = total.x**2 + total.y**2 + total.z**2
+        return numpy.sqrt(total.y**2 - momentum_squared)
+
+
 class Binning(object):
 
     def __init__(self, settings_collection):
         # type: (_settings_parser.SettingsCollection) -> None
         self.__setting = settings_collection
+        self.__sorter = _SortBins(settings_collection.bin_settings)
+        self.__mass_calc = _CalculateMass()
 
     def bin(self):
         with _bin_manager.BinManager(self.__setting) as handle:
             for event in handle:
-                mass = self.__calculate_mass(event['destination'])
+                mass = self.__mass_calc.calculate(event['destination'])
                 handle.write(
                     {
-                        'bins': self.__find_bin(mass),
+                        'bins': self.__sorter.sort(mass),
                         'files': event
                     }
                 )
 
-    @staticmethod
-    def __calculate_mass(event):
-        array = numpy.zeros(1, particle.NUMPY_PARTICLE_DTYPE)
-        particle_vector = vectors.FourVector(array)
-        for the_particle in event.iterate_over_particles():
-            if the_particle.id not in (1, 14):
-                particle_vector += the_particle
-        return numpy.sqrt(particle_vector.get_dot(particle_vector))*1000
-
-    def __find_bin(self, calculated_value):
-        previous_bin = None
-        lower_limits = self.__setting.bin_settings[0].lower_limits_list
-        for index, current_bin in enumerate(lower_limits):
-            if not index:
-                previous_bin = current_bin
-                if current_bin > calculated_value:
-                    return [600]
-            if current_bin > calculated_value > previous_bin:
-                return [previous_bin]
-            previous_bin = current_bin
-        return [current_bin]
