@@ -23,7 +23,7 @@ import numpy
 
 from PyPWA import AUTHOR, VERSION
 from PyPWA.libs.math import vectors, particle
-from PyPWA.progs.binner import _settings_parser, _multiple_writer
+from PyPWA.progs.binner import _settings_parser, _bin_manager
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
@@ -37,7 +37,7 @@ class Binning(object):
         self.__setting = settings_collection
 
     def bin(self):
-        with _multiple_writer.BinManager(self.__setting) as handle:
+        with _bin_manager.BinManager(self.__setting) as handle:
             for event in handle:
                 mass = self.__calculate_mass(event['destination'])
                 handle.write(
