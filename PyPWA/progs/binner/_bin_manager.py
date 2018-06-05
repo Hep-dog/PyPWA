@@ -72,10 +72,16 @@ class _FileHandlesDict(object):
     def __init__(self):
         self.__get_file_handles = _OpenFileHandles()
 
-    def get_bin_handles_dict(self, source_file, extras, root, bin_types):
-        # type: (Path, List[Path], Path, List[_settings_parser.BinSettings]) -> dict
+    def get_bin_handles_dict(
+            self,
+            source_file,  # type: Path
+            extras,  # type: List[Path]
+            root,  # type: Path
+            bin_types  # type: List[_settings_parser.BinSettings]
+    ):
+        # type: (...) -> dict
         file_handles = dict()
-        for lower_limit in bin_types[0].lower_limits_list:
+        for lower_limit in self.__base_limits(bin_types):
             destination = self.__get_destination(root, lower_limit, bin_types)
             if len(bin_types[1:]):
                 file_handles[lower_limit] = self.get_bin_handles_dict(
@@ -86,6 +92,13 @@ class _FileHandlesDict(object):
                     source_file, extras, destination
                 )
         return file_handles
+
+    @staticmethod
+    def __base_limits(bin_settings):
+        lower_limits = bin_settings[0].lower_limits_list
+        lower_limits.append('underflow')
+        lower_limits.append('overflow')
+        return lower_limits
 
     @staticmethod
     def __get_destination(root, lower_limit, bin_types):
@@ -129,6 +142,7 @@ class _MultipleWriter(object):
         self.__handles = self.__open_handles()
 
     def __open_handles(self):
+        # type: () -> dict
         return self.__handle_opener.get_bin_handles_dict(
             self.__settings.file_settings.source_file,
             self.__settings.file_settings.extra_files,
@@ -168,11 +182,13 @@ class _MultipleReader(object):
         self.__extras = self.__setup_extras(file_settings)
 
     def __setup_source(self, file_settings):
+        # type: (_settings_parser.FileSettings) -> data_templates.Reader
         main_reader = self.__processor.get_reader(file_settings.source_file)
         self.__event_count = main_reader.get_event_count()
         return main_reader
 
     def __setup_extras(self, file_settings):
+        # type: (_settings_parser.FileSettings) -> List[data_templates.Reader]
         extras = []
         for file in file_settings.extra_files:
             reader = self.__processor.get_reader(file)
@@ -186,6 +202,7 @@ class _MultipleReader(object):
             raise RuntimeError("Input files have a different event count!")
 
     def read(self):
+        # type: () -> Dict
         return {
             'destination': self.__get_source(),
             'extras': self.__get_extras()
@@ -259,3 +276,4 @@ class BinManager(object):
     def close(self):
         self.__reader.close()
         self.__writer.close()
+        self.__progress_bar.close()
