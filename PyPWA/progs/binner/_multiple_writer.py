@@ -19,7 +19,9 @@
 """
 
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional as Opt
+
+import tqdm
 
 from PyPWA import Path, AUTHOR, VERSION
 from PyPWA.libs.components.data_processor import (
@@ -117,40 +119,24 @@ class _CloseHandles(object):
             extra.close()
 
 
-class BinWriter(object):
+class _MultipleWriter(object):
 
     def __init__(self, settings):
         # type: (_settings_parser.SettingsCollection) -> None
-        self.__handles = None
-        self.__opened = False
         self.__settings = settings
         self.__handle_closer = _CloseHandles()
         self.__handle_opener = _FileHandlesDict()
+        self.__handles = self.__open_handles()
 
-    def open(self):
-        if not self.__opened:
-            self.__handles = self.__handle_opener.get_bin_handles(
-                self.__settings.file_settings.source_file,
-                self.__settings.file_settings.extra_files,
-                Path(), self.__settings.bin_settings
-            )
-            self.__opened = True
-        else:
-            raise RuntimeError("Directory Manager is already open!")
-
-    def __enter__(self):
-        self.open()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+    def __open_handles(self):
+        return self.__handle_opener.get_bin_handles_dict(
+            self.__settings.file_settings.source_file,
+            self.__settings.file_settings.extra_files,
+            Path(), self.__settings.bin_settings
+        )
 
     def close(self):
-        if self.__opened:
-            self.__handle_closer.close_handles(self.__handles)
-            self.__opened = False
-        else:
-            raise RuntimeError("Directory Manager isn't open!")
+        self.__handle_closer.close_handles(self.__handles)
 
     def write(self, write_packet):
         # type: (Dict) -> None
@@ -170,3 +156,106 @@ class BinWriter(object):
         writers['destination'].write(files['destination'])
         for packet in zip(writers['extras'], files['extras']):
             packet[0].write(packet[1])
+
+
+class _MultipleReader(object):
+
+    def __init__(self, file_settings):
+        # type: (_settings_parser.FileSettings) -> None
+        self.__event_count = None  # type: int
+        self.__processor = file_processor.DataProcessor()
+        self.__source = self.__setup_source(file_settings)
+        self.__extras = self.__setup_extras(file_settings)
+
+    def __setup_source(self, file_settings):
+        main_reader = self.__processor.get_reader(file_settings.source_file)
+        self.__event_count = main_reader.get_event_count()
+        return main_reader
+
+    def __setup_extras(self, file_settings):
+        extras = []
+        for file in file_settings.extra_files:
+            reader = self.__processor.get_reader(file)
+            self.__check_event_length(reader)
+            extras.append(reader)
+        return extras
+
+    def __check_event_length(self, reader):
+        # type: (data_templates.Reader) -> None
+        if reader.get_event_count() != self.__event_count:
+            raise RuntimeError("Input files have a different event count!")
+
+    def read(self):
+        return {
+            'destination': self.__get_source(),
+            'extras': self.__get_extras()
+        }
+
+    def __get_source(self):
+        return self.__source.next()
+
+    def __get_extras(self):
+        extras = []
+        for extra in self.__extras:
+            extras.append(extra.next())
+        return extras
+
+    def close(self):
+        self.__source.close()
+        for file in self.__extras:
+            file.close()
+
+    def __len__(self):
+        return self.__event_count
+
+
+class BinManager(object):
+
+    def __init__(self, settings_collection, use_progress=True):
+        # type: (_settings_parser.SettingsCollection, Opt[bool]) -> None
+        self.__reader = _MultipleReader(settings_collection.file_settings)
+        self.__writer = _MultipleWriter(settings_collection)
+        self.__event_count = len(self.__reader)
+        self.__progress_bar = self.__setup_progress_bar(use_progress)
+
+    def __setup_progress_bar(self, use_progress):
+        if use_progress:
+            return tqdm.tqdm(
+                total=self.__event_count, desc="Binning", unit_scale=True,
+                unit="events"
+            )
+        else:
+            return False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.read()
+
+    def next(self):
+        return self.read()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __len__(self):
+        return len(self.__reader)
+
+    def read(self):
+        return self.__reader.read()
+
+    def write(self, write_packet):
+        self.__increment_progress()
+        self.__writer.write(write_packet)
+
+    def __increment_progress(self):
+        if self.__progress_bar:
+            self.__progress_bar.update(1)
+
+    def close(self):
+        self.__reader.close()
+        self.__writer.close()

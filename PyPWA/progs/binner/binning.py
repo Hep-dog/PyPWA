@@ -20,81 +20,14 @@
 
 """
 import numpy
-import tqdm
 
 from PyPWA import AUTHOR, VERSION
-from PyPWA.libs.components.data_processor import (
-    file_processor, data_templates
-)
 from PyPWA.libs.math import vectors, particle
 from PyPWA.progs.binner import _settings_parser, _multiple_writer
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
 __version__ = VERSION
-
-
-class _MultipleReader(object):
-
-    def __init__(self, file_settings):
-        # type: (_settings_parser.FileSettings) -> None
-        self.__event_count = None  # type: int
-        self.__processor = file_processor.DataProcessor()
-        self.__source = self.__setup_source(file_settings)
-        self.__extras = self.__setup_extras(file_settings)
-
-    def __setup_source(self, file_settings):
-        main_reader = self.__processor.get_reader(file_settings.source_file)
-        self.__event_count = main_reader.get_event_count()
-        return main_reader
-
-    def __setup_extras(self, file_settings):
-        extras = []
-        for file in file_settings.extra_files:
-            reader = self.__processor.get_reader(file)
-            self.__check_event_length(reader)
-            extras.append(reader)
-        return extras
-
-    def __check_event_length(self, reader):
-        # type: (data_templates.Reader) -> None
-        if reader.get_event_count() != self.__event_count:
-            raise RuntimeError("Input files have a different event count!")
-
-    def __len__(self):
-        return self.__event_count
-
-    def __iter__(self):
-        return self
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def __next__(self):
-        return self.next()
-
-    def next(self):
-        return {
-            'destination': self.__get_source(),
-            'extras': self.__get_extras()
-        }
-
-    def __get_source(self):
-        return self.__source.next()
-
-    def __get_extras(self):
-        extras = []
-        for extra in self.__extras:
-            extras.append(extra.next())
-        return extras
-
-    def close(self):
-        self.__source.close()
-        for file in self.__extras:
-            file.close()
 
 
 class Binning(object):
@@ -104,21 +37,15 @@ class Binning(object):
         self.__setting = settings_collection
 
     def bin(self):
-        with _MultipleReader(self.__setting.file_settings) as multiple_reader:
-            self.__iterate_over_events(multiple_reader)
-
-    def __iterate_over_events(self, multiple_reader):
-        args = {
-            "desc": "Binning", "unit": "events"
-        }
-        with _multiple_writer.BinWriter(self.__setting) as multiple_writer:
-            for event in tqdm.tqdm(multiple_reader, **args):
+        with _multiple_writer.BinManager(self.__setting) as handle:
+            for event in handle:
                 mass = self.__calculate_mass(event['destination'])
-                packet = {
-                    'bins': self.__find_bin(mass),
-                    'files': event
-                }
-                multiple_writer.write(packet)
+                handle.write(
+                    {
+                        'bins': self.__find_bin(mass),
+                        'files': event
+                    }
+                )
 
     @staticmethod
     def __calculate_mass(event):
