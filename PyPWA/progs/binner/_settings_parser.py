@@ -20,22 +20,17 @@
 
 """
 
-import enum
+
 import logging
 import warnings
 from typing import Any, Dict, List
 
+from PyPWA.progs.binner import binning
 from PyPWA import Path, AUTHOR, VERSION
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
 __version__ = VERSION
-
-
-class BinType(enum.Enum):
-
-    Mass = enum.auto()
-    Energy = enum.auto()
 
 
 class FileSettings(object):
@@ -94,11 +89,11 @@ class BinSettings(object):
 
     @staticmethod
     def __process_bin_type(settings):
-        # type: (Dict[str, str]) -> BinType
+        # type: (Dict[str, str]) -> binning.BinType
         if settings['binning type'] == "mass":
-            return BinType.Mass
+            return binning.BinType.MASS
         elif settings['binning type'] == 'energy':
-            return BinType.Energy
+            return binning.BinType.ENERGY
         else:
             raise ValueError(
                 'Unknown bin type %s!' % settings['binning type']
@@ -138,13 +133,13 @@ class BinSettings(object):
 
     def get_calculation_prefix(self):
         return {
-            BinType.Mass: "_MeV",
-            BinType.Energy: "_GeV"
+            binning.BinType.MASS: "_MeV",
+            binning.BinType.ENERGY: "_GeV"
         }[self.__bin_type]
 
     @property
     def bin_type(self):
-        # type: () -> BinType
+        # type: () -> binning.BinType
         return self.__bin_type
 
     @property

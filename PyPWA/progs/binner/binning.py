@@ -20,7 +20,9 @@
 
 """
 
+import enum
 from typing import List
+
 import numpy
 
 from PyPWA import AUTHOR, VERSION
@@ -53,7 +55,7 @@ class _GetBinIndex(object):
         return 'overflow'
 
 
-class _SortBins(object):
+class SortBins(object):
 
     def __init__(self, bin_settings):
         # type: (List[_settings_parser.BinSettings]) -> None
@@ -75,12 +77,28 @@ class _SortBins(object):
         return found_locations
 
 
-class _CalculateMass(object):
+class BinType(enum.Enum):
+    MASS = enum.auto()
+    ENERGY = enum.auto()
+
+
+class _CalculateInterface(object):
+
+    TYPE = NotImplemented  # type: BinType
 
     def calculate(self, event):
-        # type: (particle.ParticlePool) -> List[float]
+        # type: (particle.ParticlePool) -> float
+        raise NotImplementedError
+
+
+class _CalculateMass(_CalculateInterface):
+
+    TYPE = BinType.MASS
+
+    def calculate(self, event):
+        # type: (particle.ParticlePool) -> float
         total = self.__get_particle_total(event)
-        return [self.__calculate_mass(total)]
+        return self.__calculate_mass(total)
 
     def __get_particle_total(self, event):
         # type: (particle.ParticlePool) -> vectors.FourVector
@@ -99,7 +117,34 @@ class _CalculateMass(object):
     def __calculate_mass(total):
         # type: (vectors.FourVector) -> float
         momentum_squared = total.x**2 + total.y**2 + total.z**2
-        return numpy.sqrt(total.y**2 - momentum_squared)
+        final_value = total.y**2 - momentum_squared
+        if final_value < 0:
+            return -numpy.sqrt(-final_value)
+        else:
+            return numpy.sqrt(final_value)
+
+
+class BinCalculator(object):
+
+    def __init__(self, bin_settings):
+        # type: (List[_settings_parser.BinSettings]) -> None
+        self.__bins = self.__setup_bins(bin_settings)
+
+    @staticmethod
+    def __setup_bins(settings):
+        bins = []
+        for setting in settings:
+            if setting.bin_type == BinType.MASS:
+                bins.append(_CalculateMass())
+            else:
+                raise ValueError("Unknown bin type %s!" % setting.bin_type)
+        return bins
+
+    def calculate_bin(self, event):
+        bin_values = []
+        for calc_bin in self.__bins:
+            bin_values.append(calc_bin.calculate(event))
+        return bin_values
 
 
 class Binning(object):
@@ -107,13 +152,13 @@ class Binning(object):
     def __init__(self, settings_collection):
         # type: (_settings_parser.SettingsCollection) -> None
         self.__setting = settings_collection
-        self.__sorter = _SortBins(settings_collection.bin_settings)
-        self.__mass_calc = _CalculateMass()
+        self.__sorter = SortBins(settings_collection.bin_settings)
+        self.__bin_calc = BinCalculator(settings_collection.bin_settings)
 
     def bin(self):
         with _bin_manager.BinManager(self.__setting) as handle:
             for event in handle:
-                mass = self.__mass_calc.calculate(event['destination'])
+                mass = self.__bin_calc.calculate_bin(event['destination'])
                 handle.write(
                     {
                         'bins': self.__sorter.sort(mass),
