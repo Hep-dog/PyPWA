@@ -228,18 +228,20 @@ class _MultipleReader(object):
 
 class BinManager(object):
 
-    def __init__(self, settings_collection, use_progress=True):
+    def __init__(self, settings_collection, use_progress=True, position=1):
         # type: (_settings_parser.SettingsCollection, Opt[bool]) -> None
         self.__reader = _MultipleReader(settings_collection.file_settings)
         self.__writer = _MultipleWriter(settings_collection)
         self.__event_count = len(self.__reader)
-        self.__progress_bar = self.__setup_progress_bar(use_progress)
+        self.__progress_bar = self.__setup_progress_bar(
+            use_progress, position
+        )
 
-    def __setup_progress_bar(self, use_progress):
+    def __setup_progress_bar(self, use_progress, position):
         if use_progress:
             return tqdm.tqdm(
                 total=self.__event_count, desc="Binning", unit_scale=True,
-                unit="events"
+                unit="events", position=position
             )
         else:
             return False

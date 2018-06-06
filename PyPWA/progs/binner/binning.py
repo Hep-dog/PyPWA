@@ -20,143 +20,51 @@
 
 """
 
-import enum
+import multiprocessing
+import time
 from typing import List
 
-import numpy
-
-from PyPWA import AUTHOR, VERSION
-from PyPWA.libs.math import vectors, particle
-from PyPWA.progs.binner import _settings_parser, _bin_manager
+from PyPWA import queue, AUTHOR, VERSION
+from PyPWA.progs.binner import (
+    _settings_parser, _bin_manager, _bin_calc, _directory_value
+)
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
 __version__ = VERSION
 
 
-class _GetBinIndex(object):
+class _BinProcess(multiprocessing.Process):
 
-    def __init__(self, limits):
-        self.__limits = limits
-
-    def get_bin_id(self, calculated_value):
-        if calculated_value < self.__limits[0]:
-            return 'underflow'
-        else:
-            return self.__calculate_limit(calculated_value)
-
-    def __calculate_limit(self, calculated_value):
-        previous_limit = self.__limits[0]
-        for limit in self.__limits:
-            if limit > calculated_value > previous_limit:
-                return previous_limit
-            else:
-                previous_limit = limit
-        return 'overflow'
-
-
-class SortBins(object):
-
-    def __init__(self, bin_settings):
-        # type: (List[_settings_parser.BinSettings]) -> None
-        self.__bin_sorters = self.__get_bin_sorters(bin_settings)
-
-    @staticmethod
-    def __get_bin_sorters(bin_settings):
-        # type: (List[_settings_parser.BinSettings]) -> List[_GetBinIndex]
-        bin_searchers = []
-        for bin_setting in bin_settings:
-            bin_searchers.append(_GetBinIndex(bin_setting.lower_limits_list))
-        return bin_searchers
-
-    def sort(self, calculated_values):
-        # type: (List[float]) -> List[int]
-        found_locations = []
-        for value, sorting in zip(calculated_values, self.__bin_sorters):
-            found_locations.append(sorting.get_bin_id(value))
-        return found_locations
-
-
-class BinType(enum.Enum):
-    MASS = enum.auto()
-    ENERGY = enum.auto()
-
-
-class _CalculateInterface(object):
-
-    TYPE = NotImplemented  # type: BinType
-
-    def calculate(self, event):
-        # type: (particle.ParticlePool) -> float
-        raise NotImplementedError
-
-
-class _CalculateMass(_CalculateInterface):
-
-    TYPE = BinType.MASS
-
-    def calculate(self, event):
-        # type: (particle.ParticlePool) -> float
-        total = self.__get_particle_total(event)
-        return self.__calculate_mass(total)
-
-    def __get_particle_total(self, event):
-        # type: (particle.ParticlePool) -> vectors.FourVector
-        particle_vector = self.__get_empty_four_vector()
-        for event_particle in event.iterate_over_particles():
-            if event_particle.id not in (1, 14):
-                particle_vector += event_particle
-        return particle_vector
-
-    @staticmethod
-    def __get_empty_four_vector():
-        array = numpy.zeros(1, particle.NUMPY_PARTICLE_DTYPE)
-        return vectors.FourVector(array)
-
-    @staticmethod
-    def __calculate_mass(total):
-        # type: (vectors.FourVector) -> float
-        momentum_squared = total.x**2 + total.y**2 + total.z**2
-        final_value = total.y**2 - momentum_squared
-        if final_value < 0:
-            return -numpy.sqrt(-final_value)
-        else:
-            return numpy.sqrt(final_value)
-
-
-class BinCalculator(object):
-
-    def __init__(self, bin_settings):
-        # type: (List[_settings_parser.BinSettings]) -> None
-        self.__bins = self.__setup_bins(bin_settings)
-
-    @staticmethod
-    def __setup_bins(settings):
-        bins = []
-        for setting in settings:
-            if setting.bin_type == BinType.MASS:
-                bins.append(_CalculateMass())
-            else:
-                raise ValueError("Unknown bin type %s!" % setting.bin_type)
-        return bins
-
-    def calculate_bin(self, event):
-        bin_values = []
-        for calc_bin in self.__bins:
-            bin_values.append(calc_bin.calculate(event))
-        return bin_values
-
-
-class Binning(object):
-
-    def __init__(self, settings_collection):
-        # type: (_settings_parser.SettingsCollection) -> None
+    def __init__(
+            self,
+            settings_collection,  # type: _settings_parser.SettingsCollection
+            error_queue,  # type: multiprocessing.Queue
+            position,  # type: int
+    ):
+        # type: (...) -> None
+        super(_BinProcess, self).__init__()
+        self.daemon = True
+        self.__error_queue = error_queue
+        self.__count = position
         self.__setting = settings_collection
-        self.__sorter = SortBins(settings_collection.bin_settings)
-        self.__bin_calc = BinCalculator(settings_collection.bin_settings)
+        self.__sorter = _directory_value.ValueSort(
+            settings_collection.bin_settings
+        )
+        self.__bin_calc = _bin_calc.BinCalculator(
+            settings_collection.bin_settings
+        )
 
-    def bin(self):
-        with _bin_manager.BinManager(self.__setting) as handle:
+    def run(self):
+        try:
+            self.__bin()
+        except Exception as error:
+            self.__error_queue.put(error)
+
+    def __bin(self):
+        with _bin_manager.BinManager(
+                self.__setting, True, self.__count
+        ) as handle:
             for event in handle:
                 mass = self.__bin_calc.calculate_bin(event['destination'])
                 handle.write(
@@ -165,4 +73,58 @@ class Binning(object):
                         'files': event
                     }
                 )
+
+
+class Binning(object):
+
+    def __init__(self, settings_collections):
+        # type: (List[_settings_parser.SettingsCollection]) -> None
+        self.__error_queues = None  # type: List[multiprocessing.Queue]
+        self.__processes = None  # type: List[_BinProcess]
+        self.__setup_processes(settings_collections)
+
+    def __setup_processes(self, settings_collections):
+        error_queues, processes = [], []
+        for index, settings in enumerate(settings_collections):
+            error_queue = multiprocessing.Queue()
+            processes.append(_BinProcess(settings, error_queue, index))
+            error_queues.append(error_queue)
+        self.__error_queues, self.__processes = error_queues, processes
+
+    def start(self):
+        self.__start_processes()
+        self.__wait_for_binning_to_finish()
+
+    def __start_processes(self):
+        for process in self.__processes:
+            process.start()
+
+    def __wait_for_binning_to_finish(self):
+        running = True
+        while running:
+            self.__check_queues_for_errors()
+            running = self.__processes_are_alive()
+            time.sleep(1)
+
+    def __check_queues_for_errors(self):
+        error = False
+        for the_queue in self.__error_queues:
+            try:
+                error = the_queue.get_nowait()
+            except queue.Empty:
+                pass
+        if error:
+            self.__terminate_processes()
+            raise error
+
+    def __terminate_processes(self):
+        for process in self.__processes:
+            process.terminate()
+
+    def __processes_are_alive(self):
+        for process in self.__processes:
+            if process.is_alive():
+                return True
+        return False
+
 

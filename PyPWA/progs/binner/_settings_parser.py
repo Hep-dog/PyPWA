@@ -25,7 +25,7 @@ import logging
 import warnings
 from typing import Any, Dict, List
 
-from PyPWA.progs.binner import binning
+from PyPWA.progs.binner import _bin_calc
 from PyPWA import Path, AUTHOR, VERSION
 
 __credits__ = ["Mark Jones"]
@@ -89,11 +89,11 @@ class BinSettings(object):
 
     @staticmethod
     def __process_bin_type(settings):
-        # type: (Dict[str, str]) -> binning.BinType
+        # type: (Dict[str, str]) -> _bin_calc.BinType
         if settings['binning type'] == "mass":
-            return binning.BinType.MASS
+            return _bin_calc.BinType.MASS
         elif settings['binning type'] == 'energy':
-            return binning.BinType.ENERGY
+            return _bin_calc.BinType.ENERGY
         else:
             raise ValueError(
                 'Unknown bin type %s!' % settings['binning type']
@@ -133,13 +133,13 @@ class BinSettings(object):
 
     def get_calculation_prefix(self):
         return {
-            binning.BinType.MASS: "_MeV",
-            binning.BinType.ENERGY: "_GeV"
+            _bin_calc.BinType.MASS: "_MeV",
+            _bin_calc.BinType.ENERGY: "_GeV"
         }[self.__bin_type]
 
     @property
     def bin_type(self):
-        # type: () -> binning.BinType
+        # type: () -> _bin_calc.BinType
         return self.__bin_type
 
     @property
