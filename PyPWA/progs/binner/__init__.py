@@ -22,27 +22,39 @@
 
 from PyPWA import AUTHOR, VERSION
 from PyPWA.initializers.configurator import options
+from PyPWA.libs import configuration_db
 from PyPWA.libs.components import data_processor
-from PyPWA.progs.shell.fit import pyfit
+from PyPWA.progs.binner import _settings_parser, binning
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
 __version__ = VERSION
 
 
-class Multibinner(options.Program):
+class _ConfiguredBinning(object):
 
     def __init__(self):
-        self.name = "multiple binner"
+        self.__settings = _settings_parser.SettingsFactory()
+        self.__binning = binning.Binning()
+        self.__db = configuration_db.Connector()
+
+    def start(self):
+        settings = self.__db.read("multiple binning")
+        collections = self.__settings.get_collections(settings)
+        self.__binning.bin_collections(collections)
+
+
+class MultipleBinning(options.Program):
+
+    def __init__(self):
+        self.name = "multiple binning"
         self.module_comment = "PyBinning, A python data binning utility."
 
     def get_required_components(self):
-        return [
-            data_processor.DataConf()
-        ]
+        return [data_processor.DataConf()]
 
     def get_start(self):
-        return pyfit.Fitting()
+        return _ConfiguredBinning()
 
     def get_default_options(self):
         return {
@@ -56,14 +68,15 @@ class Multibinner(options.Program):
                         ]
                     }
                 ],
-            'bin settings': [
-                {
-                    'binning type': 'mass',
-                    'lower limit': 100,
-                    'upper limit': 1000,
-                    'width of each bin': 100
-                }
-            ]
+            'bin settings':
+                [
+                    {
+                        'binning type': 'mass',
+                        'lower limit': 100,
+                        'upper limit': 1000,
+                        'width of each bin': 100
+                    }
+                ]
         }
 
     def get_option_difficulties(self):
@@ -75,15 +88,16 @@ class Multibinner(options.Program):
                         'extras': options.Levels.OPTIONAL
                     }
                 ],
-            'bin settings': [
-                {
-                    'binning type': options.Levels.REQUIRED,
-                    'lower limit': options.Levels.REQUIRED,
-                    'upper limit': options.Levels.REQUIRED,
-                    'width of each bin': options.Levels.OPTIONAL,
-                    'number of bins': options.Levels.OPTIONAL
-                }
-            ]
+            'bin settings':
+                [
+                    {
+                        'binning type': options.Levels.REQUIRED,
+                        'lower limit': options.Levels.REQUIRED,
+                        'upper limit': options.Levels.REQUIRED,
+                        'width of each bin': options.Levels.OPTIONAL,
+                        'number of bins': options.Levels.OPTIONAL
+                    }
+                ]
         }
 
     def get_option_types(self):
@@ -95,15 +109,16 @@ class Multibinner(options.Program):
                         'extras': [str]
                     }
                 ],
-            'bin settings': [
-                {
-                    'binning type': ['mass', 'energy'],
-                    'lower limit': int,
-                    'upper limit': int,
-                    'width of each bin': int,
-                    'number of bins': int
-                }
-            ]
+            'bin settings':
+                [
+                    {
+                        'binning type': ['mass', 'energy'],
+                        'lower limit': int,
+                        'upper limit': int,
+                        'width of each bin': int,
+                        'number of bins': int
+                    }
+                ]
         }
 
     def get_option_comments(self):
