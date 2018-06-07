@@ -59,7 +59,8 @@ class _BinProcess(multiprocessing.Process):
         try:
             self.__bin()
         except Exception as error:
-            self.__error_queue.put(error)
+            self.__error_queue.put(True)
+            raise error
 
     def __bin(self):
         with _bin_manager.BinManager(
@@ -77,23 +78,21 @@ class _BinProcess(multiprocessing.Process):
 
 class Binning(object):
 
-    def __init__(self, settings_collections):
+    def __init__(self):
         # type: (List[_settings_parser.SettingsCollection]) -> None
-        self.__error_queues = None  # type: List[multiprocessing.Queue]
+        self.__error_queue = multiprocessing.Queue()
         self.__processes = None  # type: List[_BinProcess]
-        self.__setup_processes(settings_collections)
 
-    def __setup_processes(self, settings_collections):
-        error_queues, processes = [], []
-        for index, settings in enumerate(settings_collections):
-            error_queue = multiprocessing.Queue()
-            processes.append(_BinProcess(settings, error_queue, index))
-            error_queues.append(error_queue)
-        self.__error_queues, self.__processes = error_queues, processes
-
-    def start(self):
+    def bin_collections(self, collections):
+        self.__setup_processes(collections)
         self.__start_processes()
         self.__wait_for_binning_to_finish()
+
+    def __setup_processes(self, settings_collections):
+        processes = []
+        for index, settings in enumerate(settings_collections):
+            processes.append(_BinProcess(settings, self.__error_queue, index))
+        self.__processes = processes
 
     def __start_processes(self):
         for process in self.__processes:
@@ -104,18 +103,16 @@ class Binning(object):
         while running:
             self.__check_queues_for_errors()
             running = self.__processes_are_alive()
-            time.sleep(1)
+            time.sleep(1.5)
 
     def __check_queues_for_errors(self):
-        error = False
-        for the_queue in self.__error_queues:
-            try:
-                error = the_queue.get_nowait()
-            except queue.Empty:
-                pass
-        if error:
-            self.__terminate_processes()
-            raise error
+        try:
+            error = self.__error_queue.get_nowait()
+        except queue.Empty:
+            error = False
+        finally:
+            if error:
+                self.__terminate_processes()
 
     def __terminate_processes(self):
         for process in self.__processes:
