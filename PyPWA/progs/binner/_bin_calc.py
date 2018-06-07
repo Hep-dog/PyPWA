@@ -55,13 +55,18 @@ class _CalculateMass(_CalculateInterface):
     def calculate(self, event):
         # type: (particle.ParticlePool) -> float
         total = self.__get_particle_total(event)
-        return self.__calculate_mass(total)
+        return numpy.sqrt(total.get_dot(total)) * 1000
 
     def __get_particle_total(self, event):
         # type: (particle.ParticlePool) -> vectors.FourVector
         particle_vector = self.__get_empty_four_vector()
+        found_photon, found_proton = False, False
         for event_particle in event.iterate_over_particles():
-            if event_particle.id not in (1, 14):
+            if event_particle.id == 1 and not found_photon:
+                found_photon = True
+            elif event_particle.id == 14 and not found_proton:
+                found_proton = True
+            else:
                 particle_vector += event_particle
         return particle_vector
 
@@ -69,16 +74,6 @@ class _CalculateMass(_CalculateInterface):
     def __get_empty_four_vector():
         array = numpy.zeros(1, particle.NUMPY_PARTICLE_DTYPE)
         return vectors.FourVector(array)
-
-    @staticmethod
-    def __calculate_mass(total):
-        # type: (vectors.FourVector) -> float
-        momentum_squared = total.x**2 + total.y**2 + total.z**2
-        final_value = total.y**2 - momentum_squared
-        if final_value < 0:
-            return -numpy.sqrt(-final_value)
-        else:
-            return numpy.sqrt(final_value)
 
 
 class BinCalculator(object):
