@@ -177,16 +177,6 @@ class SettingsCollection(object):
         self.__file_settings = file_settings
         self.__bin_settings = bin_settings
 
-    def get_bin_dimensions(self, dimension):
-        if dimension >= self.bin_dimensions_count:
-            raise IndexError("The user didn't request that many dimensions!")
-        return self.__bin_settings[dimension]
-
-    @property
-    def bin_dimensions_count(self):
-        # type: () -> int
-        return len(self.__bin_settings)
-
     @property
     def bin_settings(self):
         # type: () -> List[BinSettings]
@@ -199,31 +189,32 @@ class SettingsCollection(object):
 
 class SettingsFactory(object):
 
-    def __init__(self, settings):
-        # type: (Dict[str, Any]) -> None
-        self.__bin_settings = list()  # type: List[BinSettings]
-        self.__file_settings = list()  # type: List[FileSettings]
-        self.__collections = list()  # type: List[SettingsCollection]
-        self.__process_bin_settings(settings['bin settings'])
-        self.__process_file_settings(settings['files'])
-        self.__create_collections()
+    def get_collections(self, settings):
+        file_settings = self.__process_file_settings(settings['files'])
+        bin_settings = self.__process_bin_settings(settings['bin settings'])
+        return self.__create_collections(file_settings, bin_settings)
 
-    def __process_bin_settings(self, bin_settings):
-        # type: (List[Dict[str, Any]]) -> None
-        for setting in bin_settings:
-            self.__bin_settings.append(BinSettings(setting))
-
-    def __process_file_settings(self, file_settings):
-        # type: (List[Dict[str, str]]) -> None
+    @staticmethod
+    def __process_file_settings(file_settings):
+        # type: (List[Dict[str, str]]) -> List[FileSettings]
+        files = []
         for setting in file_settings:
-            self.__file_settings.append(FileSettings(setting))
+            files.append(FileSettings(setting))
+        return files
 
-    def __create_collections(self):
-        for file_setting in self.__file_settings:
-            self.__collections.append(
-                SettingsCollection(file_setting, self.__bin_settings)
+    @staticmethod
+    def __process_bin_settings(bin_settings):
+        # type: (List[Dict[str, Any]]) -> List[BinSettings]
+        bins = []
+        for setting in bin_settings:
+            bins.append(BinSettings(setting))
+        return bins
+
+    @staticmethod
+    def __create_collections(files, bins):
+        collections = []
+        for file_setting in files:
+            collections.append(
+                SettingsCollection(file_setting, bins)
             )
-
-    @property
-    def collections(self):
-        return self.__collections
+        return collections
