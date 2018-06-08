@@ -125,7 +125,7 @@ def multiple_binning():
     description = u"Sorts data into multiple bins."
     configuration = {
         "description": description,
-        "main": "multiple binner",
+        "main": "multiple binning",
         "main name": "Multiple Binning",
         "extras": None
     }

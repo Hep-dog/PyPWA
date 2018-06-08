@@ -80,49 +80,10 @@ class MultipleBinning(options.Program):
         }
 
     def get_option_difficulties(self):
-        return {
-            'files':
-                [
-                    {
-                        'source': options.Levels.REQUIRED,
-                        'extras': options.Levels.OPTIONAL
-                    }
-                ],
-            'bin settings':
-                [
-                    {
-                        'binning type': options.Levels.REQUIRED,
-                        'lower limit': options.Levels.REQUIRED,
-                        'upper limit': options.Levels.REQUIRED,
-                        'width of each bin': options.Levels.OPTIONAL,
-                        'number of bins': options.Levels.OPTIONAL
-                    }
-                ]
-        }
+        return None
 
     def get_option_types(self):
-        return {
-            'files':
-                [
-                    {
-                        'source': str,
-                        'extras': [str]
-                    }
-                ],
-            'bin settings':
-                [
-                    {
-                        'binning type': ['mass', 'energy'],
-                        'lower limit': int,
-                        'upper limit': int,
-                        'width of each bin': int,
-                        'number of bins': int
-                    }
-                ]
-        }
+        return None
 
     def get_option_comments(self):
-        return {
-            'files': 'uhh',
-            'bin settings': 'uhh'
-        }
+        return None
