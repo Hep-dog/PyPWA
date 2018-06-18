@@ -80,10 +80,66 @@ class MultipleBinning(options.Program):
         }
 
     def get_option_difficulties(self):
-        return None
+        return {
+            'files':
+                [
+                    {
+                        'source': options.Levels.REQUIRED,
+                        'extras': options.Levels.OPTIONAL
+                    }
+                ],
+            'bin settings':
+                [
+                    {
+                        'binning type': options.Levels.REQUIRED,
+                        'lower limit': options.Levels.REQUIRED,
+                        'upper limit': options.Levels.REQUIRED,
+                        'width of each bin': options.Levels.OPTIONAL,
+                        'number of bins': options.Levels.OPTIONAL
+                    }
+                ]
+        }
 
     def get_option_types(self):
-        return None
+        return {
+            'files':
+                [
+                    {
+                        'source': str,
+                        'extras': [str]
+                    }
+                ],
+            'bin settings':
+                [
+                    {
+                        'binning type': str,
+                        'lower limit': int,
+                        'upper limit': int,
+                        'width of each bin': int,
+                        'number of bins': int
+                    }
+                ]
+        }
 
     def get_option_comments(self):
-        return None
+        return {
+            'files':
+                [
+                    {
+                        'source': "",
+                        'extras': "File to be binned out with the source, "
+                                  "must have the same number of events."
+                    }
+                ],
+            'bin settings':
+                [
+                    {
+                        'binning type': 'Mass, T, and T Prime are supported',
+                        'lower limit': 'Directory names start with lowest '
+                                       'limit of each bin.',
+                        'upper limit': '',
+                        'width of each bin': '',
+                        'number of bins': ''
+                    }
+                ]
+        }
