@@ -115,6 +115,9 @@ class FourVector(_abstract_vectors.AbstractVector):
         # type: () -> numpy.ndarray
         return self.e**2 - self.get_length()**2
 
+    def get_mass(self):
+        return numpy.sqrt(self.get_dot(self))
+
     @property
     def e(self):
         # type: () -> numpy.ndarray
