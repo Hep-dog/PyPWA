@@ -26,7 +26,7 @@ from typing import List
 
 from PyPWA import queue, AUTHOR, VERSION
 from PyPWA.progs.binner import (
-    _settings_parser, _bin_manager, _bin_calc, _directory_value
+    _settings_parser, _bin_manager, _calculate_bins, _folder_finder
 )
 
 __credits__ = ["Mark Jones"]
@@ -48,10 +48,10 @@ class _BinProcess(multiprocessing.Process):
         self.__error_queue = error_queue
         self.__count = position
         self.__setting = settings_collection
-        self.__sorter = _directory_value.ValueSort(
+        self.__sorter = _folder_finder.ValueSort(
             settings_collection.bin_settings
         )
-        self.__bin_calc = _bin_calc.BinCalculator(
+        self.__bin_calc = _calculate_bins.BinCalculator(
             settings_collection.bin_settings
         )
 

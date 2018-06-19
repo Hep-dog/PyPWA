@@ -25,7 +25,7 @@ import logging
 import warnings
 from typing import Any, Dict, List
 
-from PyPWA.progs.binner import _bin_calc
+from PyPWA.progs.binner import _calculate_bins
 from PyPWA import Path, AUTHOR, VERSION
 
 __credits__ = ["Mark Jones"]
@@ -89,11 +89,13 @@ class BinSettings(object):
 
     @staticmethod
     def __process_bin_type(settings):
-        # type: (Dict[str, str]) -> _bin_calc.BinType
+        # type: (Dict[str, str]) -> _calculate_bins.BinType
         if settings['binning type'] == "mass":
-            return _bin_calc.BinType.MASS
-        elif settings['binning type'] == 'energy':
-            return _bin_calc.BinType.ENERGY
+            return _calculate_bins.BinType.MASS
+        elif settings['binning type'] == 't':
+            return _calculate_bins.BinType.T
+        elif settings['binning type'] == 't prime':
+            return _calculate_bins.BinType.T_PRIME
         else:
             raise ValueError(
                 'Unknown bin type %s!' % settings['binning type']
@@ -133,13 +135,14 @@ class BinSettings(object):
 
     def get_calculation_prefix(self):
         return {
-            _bin_calc.BinType.MASS: "_MeV",
-            _bin_calc.BinType.ENERGY: "_GeV"
+            _calculate_bins.BinType.MASS: "_MeV",
+            _calculate_bins.BinType.T: "_MeV",
+            _calculate_bins.BinType.T_PRIME: "_MeV"
         }[self.__bin_type]
 
     @property
     def bin_type(self):
-        # type: () -> _bin_calc.BinType
+        # type: () -> _calculate_bins.BinType
         return self.__bin_type
 
     @property

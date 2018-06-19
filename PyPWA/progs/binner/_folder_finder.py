@@ -32,8 +32,9 @@ __version__ = VERSION
 
 class _GetBinIndex(object):
 
-    def __init__(self, limits):
+    def __init__(self, limits, width):
         self.__limits = limits
+        self.__width = width
 
     def get_bin_id(self, calculated_value):
         if calculated_value < self.__limits[0]:
@@ -48,7 +49,10 @@ class _GetBinIndex(object):
                 return previous_limit
             else:
                 previous_limit = limit
-        return 'overflow'
+        if calculated_value < previous_limit + self.__width:
+            return previous_limit
+        else:
+            return 'overflow'
 
 
 class ValueSort(object):
@@ -62,7 +66,11 @@ class ValueSort(object):
         # type: (List[_settings_parser.BinSettings]) -> List[_GetBinIndex]
         bin_searchers = []
         for bin_setting in bin_settings:
-            bin_searchers.append(_GetBinIndex(bin_setting.lower_limits_list))
+            bin_searchers.append(
+                _GetBinIndex(
+                    bin_setting.lower_limits_list, bin_setting.width
+                )
+            )
         return bin_searchers
 
     def sort(self, calculated_values):

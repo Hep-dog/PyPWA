@@ -23,10 +23,8 @@
 import enum
 from typing import List
 
-import numpy
-
 from PyPWA import AUTHOR, VERSION
-from PyPWA.libs.math import vectors, particle
+from PyPWA.libs.math import particle, reaction
 from PyPWA.progs.binner import _settings_parser
 
 __credits__ = ["Mark Jones"]
@@ -36,7 +34,8 @@ __version__ = VERSION
 
 class BinType(enum.Enum):
     MASS = enum.auto()
-    ENERGY = enum.auto()
+    T = enum.auto()
+    T_PRIME = enum.auto()
 
 
 class _CalculateInterface(object):
@@ -54,21 +53,21 @@ class _CalculateMass(_CalculateInterface):
 
     def calculate(self, event):
         # type: (particle.ParticlePool) -> float
-        total = self.__get_particle_total(event)
-        return numpy.sqrt(total.get_dot(total)) * 1000
+        return reaction.m_result(event) * 1000
 
-    @staticmethod
-    def __get_particle_total(event):
-        # type: (particle.ParticlePool) -> vectors.FourVector
-        found_photon, found_proton, vector_sum = 0, 0, vectors.FourVector(1)
-        for event_particle in event.iterate_over_particles():
-            if not found_photon and event_particle.id == 1:
-                found_photon = True
-            elif not found_proton and event_particle.id == 14:
-                found_proton = True
-            else:
-                vector_sum += event_particle
-        return vector_sum
+
+class _CalculateT(_CalculateInterface):
+
+    def calculate(self, event):
+        # type: (particle.ParticlePool) -> float
+        return reaction.t(event) * 1000
+
+
+class _CalculateTPrime(_CalculateInterface):
+
+    def calculate(self, event):
+        # type: (particle.ParticlePool) -> float
+        return reaction.t_prime(event) * 1000
 
 
 class BinCalculator(object):
@@ -83,6 +82,10 @@ class BinCalculator(object):
         for setting in settings:
             if setting.bin_type == BinType.MASS:
                 bins.append(_CalculateMass())
+            elif setting.bin_type == BinType.T:
+                bins.append(_CalculateT())
+            elif settings.bin_type == BinType.T_PRIME:
+                bins.append(_CalculateTPrime())
             else:
                 raise ValueError("Unknown bin type %s!" % setting.bin_type)
         return bins

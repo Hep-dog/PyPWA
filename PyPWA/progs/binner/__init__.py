@@ -112,7 +112,7 @@ class MultipleBinning(options.Program):
             'bin settings':
                 [
                     {
-                        'binning type': str,
+                        'binning type': ['mass', 't', 't prime'],
                         'lower limit': int,
                         'upper limit': int,
                         'width of each bin': int,
