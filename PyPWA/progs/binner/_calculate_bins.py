@@ -84,7 +84,7 @@ class BinCalculator(object):
                 bins.append(_CalculateMass())
             elif setting.bin_type == BinType.T:
                 bins.append(_CalculateT())
-            elif settings.bin_type == BinType.T_PRIME:
+            elif setting.bin_type == BinType.T_PRIME:
                 bins.append(_CalculateTPrime())
             else:
                 raise ValueError("Unknown bin type %s!" % setting.bin_type)
