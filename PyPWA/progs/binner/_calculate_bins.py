@@ -21,6 +21,7 @@
 """
 
 import enum
+import warnings
 from typing import List
 
 from PyPWA import AUTHOR, VERSION
@@ -67,7 +68,14 @@ class _CalculateTPrime(_CalculateInterface):
 
     def calculate(self, event):
         # type: (particle.ParticlePool) -> float
-        return reaction.t_prime(event) * 1000
+        warnings.warn(
+            "TPrime is currently calculated in GeV2, and ins't translated "
+            "into MeV2. There is a chance it could fail. It will be "
+            "translated into MeV2 in the future, and floats will be parsed "
+            "in ranges.",
+            FutureWarning
+        )
+        return reaction.t_prime(event)
 
 
 class BinCalculator(object):
