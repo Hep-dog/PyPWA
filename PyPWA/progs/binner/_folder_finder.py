@@ -45,7 +45,7 @@ class _GetBinIndex(object):
     def __calculate_limit(self, calculated_value):
         previous_limit = self.__limits[0]
         for limit in self.__limits:
-            if limit > calculated_value > previous_limit:
+            if limit > calculated_value >= previous_limit:
                 return previous_limit
             else:
                 previous_limit = limit
