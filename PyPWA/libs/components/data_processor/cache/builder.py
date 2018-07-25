@@ -33,10 +33,8 @@ import logging
 from typing import Any
 
 from PyPWA import Path, AUTHOR, VERSION
-from PyPWA.libs import configuration_db
 from PyPWA.libs.components.data_processor.cache import (
-    _basic_info,
-    _clear_cache, _no_cache, _standard_cache, _template,
+    _basic_info, _clear_cache, _no_cache, _standard_cache, _template,
 )
 
 __credits__ = ["Mark Jones"]
@@ -69,62 +67,42 @@ class CacheBuilder(object):
 
     __LOGGER = logging.getLogger(__name__ + ".CacheBuilder")
 
-    def __init__(self):
+    def __init__(self, use_cache, clear_cache):
         # type: (bool, bool) -> None
-        settings = configuration_db.Connector()
-        self.__clear_cache = settings.read("Data Processor", "clear cache")
-        self.__use_cache = settings.read("Data Processor", "use cache")
-        self.__info_object = None  # type: _basic_info.FindBasicInfo
-        self.__selected_reader = None  # type: _template.ReadInterface
-        self.__selected_writer = None  # type: _template.WriteInterface
+        self.__use_cache = use_cache
+        self.__clear_cache = clear_cache
 
     def get_cache_interface(self, file_location):
         # type: (Path) -> _CacheInterface
-        self.__set_info_object(file_location)
-        self.__find_reader()
-        self.__find_writer()
-        return self.__make_interface()
+        info_object = self.__get_info_object(file_location)
+        reader = self.__get_reader(info_object)
+        writer = self.__get_writer(info_object)
+        return _CacheInterface(reader, writer)
 
-    def __set_info_object(self, file_location):
-        # type: (Path) -> None
-        try:
-            self.__info_object = _basic_info.FindBasicInfo(file_location)
-        except (OSError, IOError):
-            self.__LOGGER.warning("No original file found!")
-            self.__enable_cache_fallback()
+    @staticmethod
+    def __get_info_object(file_location):
+        # type: (Path) -> _basic_info.FindBasicInfo
+        info = _basic_info.FindBasicInfo()
+        info.setup_basic_info(file_location)
+        return info
 
-    def __enable_cache_fallback(self):
-        self.__LOGGER.debug("Cache set to fallback!")
-        self.__use_cache = False
-
-    def __find_reader(self):
-        if not self.__use_cache:
+    def __get_reader(self, info):
+        # type: (_basic_info.FindBasicInfo) -> _template.ReadInterface
+        if not self.__use_cache or not info.file_hash:
             self.__LOGGER.debug("No Read Cache selected.")
-            self.__selected_reader = _no_cache.NoRead()
+            return _no_cache.NoRead()
         elif self.__clear_cache:
             self.__LOGGER.debug("Clear Cache selected.")
-            self.__selected_reader = _clear_cache.ClearCache(
-                self.__info_object
-            )
+            return _clear_cache.ClearCache(info)
         else:
             self.__LOGGER.debug("Read Cache selected.")
-            self.__selected_reader = _standard_cache.ReadCache(
-                self.__info_object
-            )
+            return _standard_cache.ReadCache(info)
 
-    def __find_writer(self):
+    def __get_writer(self, info):
+        # type: (_basic_info.FindBasicInfo) -> _template.WriteInterface
         if not self.__use_cache:
             self.__LOGGER.debug("No Write Cache selected.")
-            self.__selected_writer = _no_cache.NoWrite()
+            return _no_cache.NoWrite()
         else:
             self.__LOGGER.debug("Write Cache selected.")
-            self.__selected_writer = _standard_cache.WriteCache(
-                self.__info_object
-            )
-
-    def __make_interface(self):
-        # type: () -> _CacheInterface
-        return _CacheInterface(
-            self.__selected_reader,
-            self.__selected_writer
-        )
+            return _standard_cache.WriteCache(info)

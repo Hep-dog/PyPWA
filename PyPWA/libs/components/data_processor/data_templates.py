@@ -21,9 +21,8 @@ Holds the different implementation interfaces that are needed to interface
 data module.
 """
 
-from typing import List
-
 import numpy
+from typing import List
 
 from PyPWA import Path, AUTHOR, VERSION
 

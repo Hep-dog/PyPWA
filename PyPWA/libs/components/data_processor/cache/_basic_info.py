@@ -35,16 +35,15 @@ class FindBasicInfo(object):
 
     __LOGGER = logging.getLogger(__name__ + ".FindBasicInfo")
 
-    def __init__(self, original_file):
-        # type: (Path) -> None
+    def __init__(self):
         self.__cache_location = None  # type: Path
         self.__found_hash = ""
-        self.__setup_basic_info(original_file)
 
-    def __setup_basic_info(self, original_file):
+    def setup_basic_info(self, original_file):
         # type: (Path) -> None
         self.__set_cache_location(original_file)
-        self.__set_file_hash(original_file)
+        if original_file.exists():
+            self.__set_file_hash(original_file)
 
     def __set_cache_location(self, original_file):
         # type: (Path) -> None

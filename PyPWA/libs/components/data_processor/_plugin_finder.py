@@ -35,9 +35,7 @@ from typing import List, Union
 
 from PyPWA import Path, AUTHOR, VERSION, builtin_plugins
 from PyPWA.libs import plugin_loader
-from PyPWA.libs.components.data_processor import (
-    data_templates, exceptions, SUPPORTED_DATA_TYPE
-)
+from PyPWA.libs.components.data_processor import data_templates, exceptions
 
 __credits__ = ["Mark Jones"]
 __author__ = AUTHOR
@@ -143,14 +141,15 @@ class _FindWritePlugins(object):
         self.__file_extension = ""
         self.__file_name = None  # type: Path
 
-    def get_plugin(self, file_location, is_particle_pool, is_basic_type):
-        # type: (Path, SUPPORTED_DATA_TYPE) -> data_templates.DataPlugin
+    def get_plugin(
+            self, file_location, is_particle_pool, is_basic_type):
+        # type: (Path, bool, bool) -> data_templates.DataPlugin
         self.__set_data_type(is_particle_pool, is_basic_type)
         self.__set_data_extension(file_location)
         return self.__search_for_plugins()
 
     def __set_data_type(self, is_particle_pool, is_basic_type):
-        # type: (SUPPORTED_DATA_TYPE) -> None
+        # type: (bool, bool) -> None
         if is_particle_pool and not is_basic_type:
             self.__data_is_pool = True
         elif is_basic_type and not is_particle_pool:

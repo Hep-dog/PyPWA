@@ -21,14 +21,13 @@ Main object for Parsing Data
 """
 
 import logging
-from typing import Optional as Opt
+from typing import Union, Optional as Opt
 
 import numpy
 
 from PyPWA import Path, AUTHOR, VERSION
 from PyPWA.libs.components.data_processor import (
-    _plugin_finder,
-    data_templates, exceptions, SUPPORTED_DATA_TYPE
+    _plugin_finder, data_templates, exceptions
 )
 from PyPWA.libs.components.data_processor.cache import builder
 from PyPWA.libs.math import particle
@@ -38,85 +37,67 @@ __author__ = AUTHOR
 __version__ = VERSION
 
 
+SUPPORTED_DATA = Union[numpy.ndarray, particle.ParticlePool]
+
+
 class _DataLoader(object):
 
     __LOGGER = logging.getLogger(__name__ + "._DataLoader")
 
-    def __init__(self):
-        # type: () -> None
+    def __init__(self, use_cache, clear_cache):
+        # type: (bool, bool) -> None
         self.__plugin_search = _plugin_finder.PluginSearch()
-        self.__cache_builder = builder.CacheBuilder()
-        self.__cache_interface = None  # type: builder._CacheInterface
-        self.file_location = None  # type: Path
+        self.__cache_builder = builder.CacheBuilder(use_cache, clear_cache)
 
-    def parse(self, file_location):
+    def parse(self, file):
         # type: (Path) -> numpy.ndarray
-        self.file_location = file_location
-        self.__set_cache_interface()
-        if self.__cache_interface.is_valid():
-            self.__LOGGER.info(
-                "Found Cache for '%s', loading!" % file_location
-            )
-            return self.__cache_interface.read_cache()
+        cache = self.__cache_builder.get_cache_interface(file)
+        if cache.is_valid():
+            self.__LOGGER.info("Loading cache for %s" % file)
+            return cache.read_cache()
         else:
             self.__LOGGER.info("No cache found, loading file directly.")
-            return self.__parse_with_cache()
+            return self.__read_data(cache, file)
 
-    def __set_cache_interface(self):
-        self.__cache_interface = self.__cache_builder.get_cache_interface(
-            self.file_location
-        )
-
-    def __parse_with_cache(self):
-        data = self.__read_data()
-        self.__cache_interface.write_cache(data)
+    def __read_data(self, cache, file):
+        plugin = self.__load_read_plugin(file)
+        data = plugin.get_plugin_memory_parser().parse(file)
+        cache.write_cache(data)
         return data
 
-    def __read_data(self):
-        plugin = self.__load_read_plugin(self.file_location)
-        returned_parser = plugin.get_plugin_memory_parser()
-        return returned_parser.parse(self.file_location)
-
-    def __load_read_plugin(self, file_location):
+    def __load_read_plugin(self, file):
         # type: (Path) -> data_templates.DataPlugin
         try:
-            return self.__plugin_search.get_read_plugin(file_location)
+            return self.__plugin_search.get_read_plugin(file)
         except exceptions.UnknownData:
             raise OSError
 
 
 class _DataDumper(object):
 
-    def __init__(self):
-        # type: () -> None
+    def __init__(self, use_cache, clear_cache):
+        # type: (bool, bool) -> None
         self.__plugin_search = _plugin_finder.PluginSearch()
-        self.__cache_builder = builder.CacheBuilder()
-        self.__cache_interface = None  # type: builder._CacheInterface
+        self.__cache_builder = builder.CacheBuilder(use_cache, clear_cache)
 
-    def write(self, file_location, data):
+    def write(self, file, data):
         # type: (Path, numpy.ndarray) -> None
-        self.__write_data(file_location, data)
-        self.__set_cache_interface(file_location)
-        self.__cache_interface.write_cache(data)
+        self.__write_data(file, data)
+        cache = self.__cache_builder.get_cache_interface(file)
+        cache.write_cache(data)
 
-    def __write_data(self, file_location, data):
-        # type: (Path, SUPPORTED_DATA_TYPE) -> None
-        plugin = self.__load_write_plugin(file_location, data)
+    def __write_data(self, file, data):
+        # type: (Path, data_templates.SUPPORTED_DATA) -> None
+        plugin = self.__load_write_plugin(file, data)
         found_parser = plugin.get_plugin_memory_parser()
-        found_parser.write(file_location, data)
+        found_parser.write(file, data)
 
-    def __set_cache_interface(self, file_location):
-        # type: (Path) -> None
-        self.__cache_interface = self.__cache_builder.get_cache_interface(
-            file_location
-        )
-
-    def __load_write_plugin(self, file_location, data):
+    def __load_write_plugin(self, file, data):
         # type: (Path, numpy.ndarray) -> data_templates.DataPlugin
         is_pool, is_basic = self.__find_data_type(data)
         try:
             return self.__plugin_search.get_write_plugin(
-                file_location, is_pool, is_basic
+                file, is_pool, is_basic
             )
         except exceptions.UnknownData:
             raise RuntimeError("Can not write data!")
@@ -136,45 +117,45 @@ class _Iterator(object):
     def __init__(self):
         self.__plugin_fetcher = _plugin_finder.PluginSearch()
 
-    def return_reader(self, file_location):
-        plugin = self.__plugin_fetcher.get_read_plugin(file_location)
-        return plugin.get_plugin_reader(file_location)
+    def return_reader(self, file):
+        plugin = self.__plugin_fetcher.get_read_plugin(file)
+        return plugin.get_plugin_reader(file)
 
-    def return_writer(self, file_location, is_particle, is_basic):
+    def return_writer(self, file, is_particle, is_basic):
         # type: (Path, bool, bool) -> data_templates.Writer
         plugin = self.__plugin_fetcher.get_write_plugin(
-            file_location, is_particle, is_basic
+            file, is_particle, is_basic
         )
-        return plugin.get_plugin_writer(file_location)
+        return plugin.get_plugin_writer(file)
 
 
 class DataProcessor(object):
 
-    def __init__(self):
-        self.__loader = _DataLoader()
-        self.__dumper = _DataDumper()
+    def __init__(
+            self,
+            enable_cache=False,  # type: bool
+            clear_cache=False,  # type: bool
+    ):
+        self.__loader = _DataLoader(enable_cache, clear_cache)
+        self.__dumper = _DataDumper(enable_cache, clear_cache)
         self.__iterator = _Iterator()
 
-    def parse(self, file_location):
+    def parse(self, file):
         # type: (Path) -> numpy.ndarray
-        return self.__loader.parse(file_location)
+        return self.__loader.parse(file)
 
-    def fallback_reader(self):
-        # type: () -> data_templates.Reader
-        return self.__iterator.return_reader(self.__loader.file_location)
-
-    def get_reader(self, file_location):
+    def get_reader(self, file):
         # type: (Path) -> data_templates.Reader
-        return self.__iterator.return_reader(file_location)
+        return self.__iterator.return_reader(file)
 
-    def write(self, file_location, data):
-        # type: (Path, SUPPORTED_DATA_TYPE) -> None
-        self.__dumper.write(file_location, data)
+    def write(self, file, data):
+        # type: (Path, data_templates.SUPPORTED_DATA) -> None
+        self.__dumper.write(file, data)
 
     def get_writer(
-            self, file_location, is_particle_pool=False, is_basic_type=False
+            self, file, is_particle_pool=False, is_basic_type=False
     ):
         # type: (Path, Opt[bool], Opt[bool]) -> data_templates.Writer
         return self.__iterator.return_writer(
-            file_location, is_particle_pool, is_basic_type
+            file, is_particle_pool, is_basic_type
         )
